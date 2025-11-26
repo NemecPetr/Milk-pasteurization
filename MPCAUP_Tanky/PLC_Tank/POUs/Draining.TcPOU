@@ -1,0 +1,168 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="Draining" Id="{a501d01f-bc41-415b-8bb8-19a7a35d7bf8}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK Draining
+VAR_INPUT
+	diEnabled : BOOL;
+END_VAR
+VAR_OUTPUT
+	doEnabled : BOOL;
+END_VAR
+VAR_IN_OUT
+	DrainingPhase : TPhaseDraining;
+	DrainingValve : TValve;
+	
+END_VAR
+VAR
+	State_temp	:	INT :=0;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[{region "Aut/Man"}
+    // switching state of engine - automatic or manual control (default state is manual)
+		IF	DrainingPhase.Cmd.ManCtrl	THEN
+		DrainingPhase.State.ManCtrl	:= TRUE;
+		DrainingPhase.State.AutCtrl := FALSE;			 
+	END_IF	 
+  
+	IF	DrainingPhase.Cmd.AutCtrl	THEN
+		DrainingPhase.State.ManCtrl	:= FALSE;
+		DrainingPhase.State.AutCtrl := TRUE;			 
+	END_IF
+		 
+	IF	(DrainingPhase.Cmd.ManCtrl AND DrainingPhase.Cmd.AutCtrl) 	THEN
+		DrainingPhase.State.ManCtrl	:= TRUE;
+		DrainingPhase.State.AutCtrl := FALSE;		 
+	END_IF
+	
+	DrainingPhase.Cmd.ManCtrl	:= FALSE;
+	DrainingPhase.Cmd.AutCtrl	:= FALSE;	 
+	
+
+{endregion}
+
+{region "ManCtrl"}
+    // processing manual actions - if command is processed, it is sets to FALSE even if can't be processed
+    // Phase commands are start, stop, pause and resume 
+    // Start - open draining valve 
+    // Stop - close draining valve
+    // Pause - close draining valve
+    // Resume - open draining valve
+    // real states of phase are writed into states in phase structure
+  	IF	DrainingPhase.State.ManCtrl	THEN
+			 
+	CASE State_temp OF
+	
+	0:	//IDLE STATE - nothing happens
+		 DrainingPhase.State.Running	:= FALSE;
+		 DrainingPhase.State.Paused	:= FALSE;
+		 DrainingPhase.State.Idle	:= TRUE;
+		 IF DrainingPhase.Cmd.StartMan THEN
+				  State_temp	:= 1;
+			  END_IF
+	1:	//RUNNING STATE - manual running
+		 DrainingPhase.State.Running	:= TRUE;
+		 DrainingPhase.State.Paused	:= FALSE;
+		 DrainingPhase.State.Idle	:= FALSE;
+		 IF DrainingPhase.Cmd.StopMan THEN
+				  State_temp	:= 0;
+		 ELSIF DrainingPhase.Cmd.PauseMan THEN
+				  State_temp := 2;	
+		 	 END_IF
+	2:	//PAUSED STATE - in PAUSE you are able to go into either RUNNING or IDLE
+		 DrainingPhase.State.Running	:= FALSE;
+		 DrainingPhase.State.Paused	:= TRUE;
+		 DrainingPhase.State.Idle	:= FALSE;
+		IF DrainingPhase.Cmd.ResumeMan THEN
+				  State_temp	:= 1;
+		 ELSIF DrainingPhase.Cmd.StopMan THEN
+				  State_temp := 0;	
+		 	END_IF
+				  
+	END_CASE
+		
+	DrainingPhase.Cmd.StartMan	:= FALSE; 
+	DrainingPhase.Cmd.PauseMan	:= FALSE;
+	DrainingPhase.Cmd.StopMan	:= FALSE;
+	DrainingPhase.Cmd.ResumeMan	:= FALSE;
+   END_IF
+	   
+{endregion}
+
+{region "AutCtrl"}
+    //if request to run in automatic mode -> set auto request to open of filling valve to 1 and close to 0, if not open 0 close 1
+    // commands should be sets to false after their processing
+	 IF DrainingPhase.State.AutCtrl	THEN
+		
+	IF	DrainingPhase.Cmd.StartAut THEN
+		DrainingPhase.State.Running	:= TRUE;
+		DrainingPhase.State.Idle		:= FALSE;	 
+	ELSIF	DrainingPhase.Cmd.StopAut THEN	
+		DrainingPhase.State.Idle		:= TRUE;
+		DrainingPhase.State.Running	:= FALSE;
+	END_IF
+
+	DrainingPhase.Cmd.StartAut	:= FALSE;
+	DrainingPhase.Cmd.StopAut	:= FALSE;	
+   
+  END_IF
+	
+   
+{endregion}
+{region "Done"}
+    //every phase should have finish condition - draining phase - if water level is below requested level
+    //after that done state should be setted to 1
+   DrainingPhase.ParamDrainLevel	:= 0.02;		//temporary inicialization for testing
+		
+	IF	DrainingPhase.ParamDrainLevel >= Global.Tank1.Filling.WaterLevel	THEN	//just for now I am using variablbe from Filling	
+		DrainingPhase.Cmd.StopMan	:= TRUE;										//perhaps I gotta create new FB EngToRaw for Draining.WaterLevel
+		DrainingPhase.Cmd.StopAut	:= TRUE;
+		DrainingPhase.State.Done		:= TRUE;		
+	ELSIF	DrainingPhase.Cmd.ResetDone THEN
+		DrainingPhase.State.Done	:= FALSE;
+		DrainingPhase.Cmd.ResetDone := FALSE;
+	ELSE
+		DrainingPhase.State.Done	:= FALSE;
+    END_IF
+{endregion}
+
+{region "States"} 
+    //Command valve in cases of states
+	IF DrainingPhase.State.Running  AND NOT DrainingPhase.State.Idle AND NOT DrainingPhase.State.Paused AND NOT DrainingPhase.State.Done THEN 
+        DrainingValve.Cmd.Req2OpenAut := TRUE;
+        DrainingValve.Cmd.Req2CloseAut := FALSE;
+    ELSE
+        DrainingValve.Cmd.Req2OpenAut := FALSE;
+        DrainingValve.Cmd.Req2CloseAut := TRUE;
+    END_IF;
+
+   
+{endregion}
+
+// delault state of phase - if not any state sets state to idle
+IF (NOT DrainingPhase.State.Idle) AND (NOT DrainingPhase.State.Paused) AND (NOT DrainingPhase.State.Running) THEN
+    DrainingPhase.State.Idle := 1;
+END_IF;
+
+// write binary states into int value for visualization
+IF DrainingPhase.State.Idle THEN
+    DrainingPhase.State.StateInt := Global.PhIdle;
+ELSIF DrainingPhase.State.Running THEN
+    DrainingPhase.State.StateInt := Global.PhRunning;
+ELSE
+    DrainingPhase.State.StateInt := Global.PhPause;
+END_IF;
+
+//Ponechte pro moznost retezeni volani bloku v LAD
+doEnabled := diEnabled;]]></ST>
+    </Implementation>
+    <LineIds Name="Draining">
+      <LineId Id="714" Count="94" />
+      <LineId Id="847" Count="0" />
+      <LineId Id="809" Count="6" />
+      <LineId Id="863" Count="1" />
+      <LineId Id="816" Count="30" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

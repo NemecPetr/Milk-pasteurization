@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="XNOR" Id="{effdb1b1-0512-4630-a66b-8b98029bf13e}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION XNOR : BOOL
+VAR_INPUT
+	A	:	BOOL;
+	B	:	BOOL;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[XNOR := (A AND B) OR ((NOT A) AND  (NOT B));]]></ST>
+    </Implementation>
+    <LineIds Name="XNOR">
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>
