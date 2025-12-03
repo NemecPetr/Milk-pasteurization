@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
   <POU Name="Heater" Id="{fe81cd62-8fb3-4eb5-8579-8abf8e5327d3}" SpecialFunc="None">
     <Declaration><![CDATA[FUNCTION_BLOCK Heater
 VAR_INPUT
@@ -42,6 +42,23 @@ ioHeatStruct.State.HeatingOut := ioHeatStruct.PID.fOut;
 	 
 {region "Manual/Automat"}
 // switching state of engine - automatic or manual control (default state is manual)
+	IF ioHeatStruct.Cmd.ManCtrl OR ioHeatStruct.State.GenErr THEN 
+		ioHeatStruct.State.ManCtrl := TRUE;	  
+		ioHeatStruct.State.AutCtrl := FALSE;
+	END_IF
+		 
+	IF ioHeatStruct.Cmd.AutCtrl  AND NOT ioHeatStruct.Cmd.ManCtrl AND NOT ioHeatStruct.State.GenErr THEN
+		ioHeatStruct.State.AutCtrl := TRUE;	 
+		ioHeatStruct.State.ManCtrl := FALSE; 
+	END_IF
+		 
+	IF  ioHeatStruct.State.AutCtrl  = ioHeatStruct.State.ManCtrl THEN 
+		ioHeatStruct.State.AutCtrl := FALSE;	 
+		ioHeatStruct.State.ManCtrl := TRUE; 
+	END_IF
+		 
+	ioHeatStruct.Cmd.ManCtrl := FALSE;
+	ioHeatStruct.Cmd.AutCtrl := FALSE;
 
 {endregion}
 	 
@@ -49,6 +66,20 @@ ioHeatStruct.State.HeatingOut := ioHeatStruct.PID.fOut;
 {region "ManCtrl"}
 // processing manual actions - if command is processed, it is set to FALSE even if can't be processed
 // Engine commands are turn off (stop) and turn on (start)
+IF ioHeatStruct.State.ManCtrl  	THEN
+	
+	IF ioHeatStruct.Cmd.TurnOnMan	THEN
+		ioHeatStruct.State.EnableOut	:= TRUE;
+		END_IF	
+	IF	ioHeatStruct.Cmd.TurnOffMan	THEN
+		ioHeatStruct.State.EnableOut	:= FALSE;
+		END_IF	
+	IF	ioHeatStruct.Cmd.TurnOffMan =  ioHeatStruct.Cmd.TurnOnMan	THEN
+		ioHeatStruct.State.EnableOut	:= FALSE;
+		END_IF	
+						   
+END_IF
+		
 
 {endregion}
  
@@ -59,8 +90,14 @@ ioHeatStruct.State.HeatingOut := ioHeatStruct.PID.fOut;
 {endregion}
  
 {region "Error states"}
+ioHeatStruct.ParamHeatingSetPointAutomat	:= 90;
+{endregion}
 // if water temperature is too high, stop heating and generate error
-
+	IF iWaterTemp > ioHeatStruct.ParamHeatingSetPointAutomat THEN
+		ioHeatStruct.State.Err := TRUE;
+		oHeaterEnable := FALSE;
+	END_IF
+	 
 {endregion}
 	 
  
@@ -86,11 +123,23 @@ oHeaterEnable := ioHeatStruct.State.EnableOut;]]></ST>
       <LineId Id="54" Count="0" />
       <LineId Id="9" Count="0" />
       <LineId Id="321" Count="0" />
+      <LineId Id="452" Count="15" />
+      <LineId Id="451" Count="0" />
       <LineId Id="109" Count="0" />
       <LineId Id="71" Count="0" />
       <LineId Id="126" Count="0" />
       <LineId Id="159" Count="1" />
       <LineId Id="337" Count="1" />
+      <LineId Id="468" Count="0" />
+      <LineId Id="470" Count="0" />
+      <LineId Id="474" Count="1" />
+      <LineId Id="484" Count="0" />
+      <LineId Id="478" Count="2" />
+      <LineId Id="482" Count="1" />
+      <LineId Id="477" Count="0" />
+      <LineId Id="481" Count="0" />
+      <LineId Id="471" Count="0" />
+      <LineId Id="469" Count="0" />
       <LineId Id="180" Count="0" />
       <LineId Id="161" Count="0" />
       <LineId Id="190" Count="1" />
@@ -98,7 +147,11 @@ oHeaterEnable := ioHeatStruct.State.EnableOut;]]></ST>
       <LineId Id="201" Count="0" />
       <LineId Id="192" Count="0" />
       <LineId Id="202" Count="1" />
+      <LineId Id="490" Count="0" />
+      <LineId Id="489" Count="0" />
       <LineId Id="354" Count="0" />
+      <LineId Id="486" Count="2" />
+      <LineId Id="485" Count="0" />
       <LineId Id="436" Count="0" />
       <LineId Id="204" Count="0" />
       <LineId Id="434" Count="0" />
